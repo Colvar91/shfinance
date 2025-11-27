@@ -1,0 +1,8 @@
+## Interface: 90207
+## Title: SH Finanzen
+## Notes: Finanzverwaltung für Rollenspiel-Charaktere
+## Author: Annila
+## Version: 0.8
+## SavedVariablesPerCharacter: SHFinanzenDB
+
+core.lua
