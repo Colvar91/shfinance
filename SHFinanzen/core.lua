@@ -711,6 +711,72 @@ end
 -----------------------------------------
 -- Tägliche und monatliche Buchung
 -----------------------------------------
+---------------------------------------------------------
+-- 📅 Offline-Tage nachberechnen
+---------------------------------------------------------
+local function DaysBetween(date1, date2)
+    local y1,m1,d1 = date1:match("(%d+)%-(%d+)%-(%d+)")
+    local y2,m2,d2 = date2:match("(%d+)%-(%d+)%-(%d+)")
+    if not y1 or not y2 then return 0 end
+
+    local t1 = time({year=y1, month=m1, day=d1})
+    local t2 = time({year=y2, month=m2, day=d2})
+    return math.floor((t2 - t1) / 86400)
+end
+
+local last   = SHFinanzenDB.lastPayout or ""
+local today  = date("%Y-%m-%d")
+local missed = 0
+
+if last ~= "" and last ~= today then
+    missed = DaysBetween(last, today)
+end
+
+if missed > 1 then
+    print("|cffff5555[SH Finanzen] Du warst "..missed.." Tage offline — hole Buchungen nach.|r")
+
+    for i = missed, 1, -1 do
+        local tstamp = date("%Y-%m-%d", time() - (i*86400))
+
+        -- ➕ Tageslohn
+        if (SHFinanzenDB.daily or 0) > 0 then
+            local copper = SHFinanzenDB.daily * 100
+            SHFinanzenDB.balance = SHFinanzenDB.balance + copper
+
+            table.insert(SHFinanzenDB.transactions,{
+                time        = tstamp,
+                type        = "income",
+                gold        = math.floor(copper/10000),
+                silver      = math.floor((copper%10000)/100),
+                copper      = copper%100,
+                copperValue = copper,
+                desc        = "Nachzahlung (Offline-Tag)"
+            })
+        end
+
+        -- ➖ Lebensunterhalt
+        if (SHFinanzenDB.dailyExpense or 0) > 0 then
+            local cost = SHFinanzenDB.dailyExpense * 100
+            SHFinanzenDB.balance = SHFinanzenDB.balance - cost
+
+            table.insert(SHFinanzenDB.transactions,{
+                time        = tstamp,
+                type        = "expense",
+                gold        = math.floor(cost/10000),
+                silver      = math.floor((cost%10000)/100),
+                copper      = cost%100,
+                copperValue = -cost,
+                desc        = "Lebensunterhalt (Offline-Tag)"
+            })
+        end
+    end
+
+    print("|cff00ff00[SH Finanzen] Offline-Tage erfolgreich verbucht.|r")
+end
+
+-- Heute als letzten Buchungstag setzen
+SHFinanzenDB.lastPayout = today
+
 C_Timer.After(0.1, function()
 
     -- Wenn Startkapital noch nicht gesetzt wurde → nichts buchen
