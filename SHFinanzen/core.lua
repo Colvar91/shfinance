@@ -711,75 +711,55 @@ end
 -----------------------------------------
 -- Tägliche und monatliche Buchung
 -----------------------------------------
----------------------------------------------------------
--- 📅 Offline-Tage nachberechnen
----------------------------------------------------------
-local function DaysBetween(date1, date2)
-    local y1,m1,d1 = date1:match("(%d+)%-(%d+)%-(%d+)")
-    local y2,m2,d2 = date2:match("(%d+)%-(%d+)%-(%d+)")
-    if not y1 or not y2 then return 0 end
+C_Timer.After(0.1, function()
+-------------------------------------------------
+-- 🔥 Offline-Nachberechnung – fehlerfrei
+-------------------------------------------------
+local function DaysBetween(oldDate, newDate)
+    local oy,om,od = oldDate:match("(%d+)-(%d+)-(%d+)")
+    local ny,nm,nd = newDate:match("(%d+)-(%d+)-(%d+)")
+    if not oy or not ny then return 0 end
 
-    local t1 = time({year=y1, month=m1, day=d1})
-    local t2 = time({year=y2, month=m2, day=d2})
+    local t1 = time({year=oy, month=om, day=od, hour=0})
+    local t2 = time({year=ny, month=nm, day=nd, hour=0})
+
     return math.floor((t2 - t1) / 86400)
 end
 
-local last   = SHFinanzenDB.lastPayout or ""
-local today  = date("%Y-%m-%d")
-local missed = 0
+local today = date("%Y-%m-%d")
+local diffDays = DaysBetween(SHFinanzenDB.lastPayout or today, today)
 
-if last ~= "" and last ~= today then
-    missed = DaysBetween(last, today)
+if diffDays > 0 then
+    local income  = (SHFinanzenDB.daily or 0)        * 100 * diffDays
+    local expense = (SHFinanzenDB.dailyExpense or 0) * 100 * diffDays
+    local result  = income - expense
+
+    SHFinanzenDB.balance = SHFinanzenDB.balance + result
+    SHFinanzenDB.lastPayout = today
+
+    table.insert(SHFinanzenDB.transactions,{
+        time        = today,
+        type        = (result >= 0) and "income" or "expense",
+        gold        = math.floor(math.abs(result)/10000),
+        silver      = math.floor((math.abs(result)%10000)/100),
+        copper      = math.abs(result)%100,
+        copperValue = result,
+        desc        = diffDays .. " Tage Nachzahlung"
+    })
+
+    local sign = result < 0 and "-" or "+"
+    print("|cffff5555[SH Finanzen]|r Nachzahlung für "
+        ..diffDays.." Tage: |cffffff00" .. sign
+        ..math.floor(math.abs(result)/10000).."g "
+        ..math.floor((math.abs(result)%10000)/100).."s "
+        ..(math.abs(result)%100).."k|r" )
 end
 
-if missed > 1 then
-    print("|cffff5555[SH Finanzen] Du warst "..missed.." Tage offline — hole Buchungen nach.|r")
 
-    for i = missed, 1, -1 do
-        local tstamp = date("%Y-%m-%d", time() - (i*86400))
+-----------------------------------------
 
-        -- ➕ Tageslohn
-        if (SHFinanzenDB.daily or 0) > 0 then
-            local copper = SHFinanzenDB.daily * 100
-            SHFinanzenDB.balance = SHFinanzenDB.balance + copper
 
-            table.insert(SHFinanzenDB.transactions,{
-                time        = tstamp,
-                type        = "income",
-                gold        = math.floor(copper/10000),
-                silver      = math.floor((copper%10000)/100),
-                copper      = copper%100,
-                copperValue = copper,
-                desc        = "Nachzahlung (Offline-Tag)"
-            })
-        end
-
-        -- ➖ Lebensunterhalt
-        if (SHFinanzenDB.dailyExpense or 0) > 0 then
-            local cost = SHFinanzenDB.dailyExpense * 100
-            SHFinanzenDB.balance = SHFinanzenDB.balance - cost
-
-            table.insert(SHFinanzenDB.transactions,{
-                time        = tstamp,
-                type        = "expense",
-                gold        = math.floor(cost/10000),
-                silver      = math.floor((cost%10000)/100),
-                copper      = cost%100,
-                copperValue = -cost,
-                desc        = "Lebensunterhalt (Offline-Tag)"
-            })
-        end
-    end
-
-    print("|cff00ff00[SH Finanzen] Offline-Tage erfolgreich verbucht.|r")
-end
-
--- Heute als letzten Buchungstag setzen
-SHFinanzenDB.lastPayout = today
-
-C_Timer.After(0.1, function()
-
-    -- Wenn Startkapital noch nicht gesetzt wurde → nichts buchen
+    -- Wenn Startkapital noch nicht gesetzt wurde, dann nichts buchen.
     if not SHFinanzenDB.initialSet then
         RestorePos()
         UpdateOverview()
@@ -828,28 +808,33 @@ C_Timer.After(0.1, function()
         SHFinanzenDB.lastPayout = today
     end
 
-    -- 2) Monatliche Kosten (Miete + Pacht)
-    local thisMonth = date("%Y-%m")
-    if SHFinanzenDB.lastMonth ~= thisMonth then
-        local monthly = ((SHFinanzenDB.rent or 0) * 100) + ((SHFinanzenDB.lease or 0) * 100)
+-------------------------------------------------------
+-- 🔍 DEBUG – Monatsberechnung Prüfen
+-------------------------------------------------------
+do
+    local today    = tonumber(date("%d"))
+    local month    = tonumber(date("%m"))
+    local year     = tonumber(date("%Y"))
 
-        if monthly > 0 then
-            local neg = -monthly
-            SHFinanzenDB.balance = (SHFinanzenDB.balance or 0) + neg
-
-            table.insert(SHFinanzenDB.transactions, {
-                time        = date("%Y-%m-%d"),
-                type        = "expense",
-                gold        = math.floor(monthly / 10000),
-                silver      = math.floor((monthly % 10000) / 100),
-                copper      = monthly % 100,
-                copperValue = neg,
-                desc        = "(Miete / Pacht)"
-            })
-        end
-
-        SHFinanzenDB.lastMonth = thisMonth
+    local function DaysInMonth(month, year)
+        return tonumber(date("%d", time({year = year, month = month + 1, day = 0})))
     end
+
+    local monthLen = DaysInMonth(month, year)
+    local last     = SHFinanzenDB.lastMonthCheck
+    if not last then last = "0-0" end
+
+    print("Heute:", today,"/",month,"/",year)
+    print("Letzte Abrechnung:", last," Monatstage:",monthLen)
+
+    local lastY,lastM = last:match("(%d+)%-(%d+)")
+    lastY,lastM = tonumber(lastY) or year, tonumber(lastM) or month
+
+    local missed = (year-lastY)*12 + (month-lastM)
+    print("Fehlende Monate:", missed)
+
+    if today == monthLen then print("Heute ist Monatsabschluss-Tag") else print("Nicht letzter Tag → keine Abrechnung") end
+end
 
 RestorePos()
 UpdateOverview()
