@@ -712,52 +712,47 @@ end
 -- Tägliche und monatliche Buchung
 -----------------------------------------
 C_Timer.After(0.1, function()
--------------------------------------------------
--- 🔥 Offline-Nachberechnung – fehlerfrei
--------------------------------------------------
+
+---------------------------------------------------------
+-- 🔥 Offline-Nachzahlung (Lohn + Unterhalt für Fehltage)
+---------------------------------------------------------
 local function DaysBetween(oldDate, newDate)
     local oy,om,od = oldDate:match("(%d+)-(%d+)-(%d+)")
     local ny,nm,nd = newDate:match("(%d+)-(%d+)-(%d+)")
     if not oy or not ny then return 0 end
 
-    local t1 = time({year=oy, month=om, day=od, hour=0})
-    local t2 = time({year=ny, month=nm, day=nd, hour=0})
-
+    local t1 = time({year=oy, month=om, day=od})
+    local t2 = time({year=ny, month=nm, day=nd})
     return math.floor((t2 - t1) / 86400)
 end
 
-local today = date("%Y-%m-%d")
-local diffDays = DaysBetween(SHFinanzenDB.lastPayout or today, today)
+local today    = date("%Y-%m-%d")
+local last     = SHFinanzenDB.lastPayout or today
+local diffDays = DaysBetween(last, today)
 
 if diffDays > 0 then
-    local income  = (SHFinanzenDB.daily or 0)        * 100 * diffDays
-    local expense = (SHFinanzenDB.dailyExpense or 0) * 100 * diffDays
-    local result  = income - expense
-
+    local wage      = (SHFinanzenDB.daily or 0) * diffDays * 100
+    local cost      = (SHFinanzenDB.dailyExpense or 0) * diffDays * 100
+    local result    = wage - cost
     SHFinanzenDB.balance = SHFinanzenDB.balance + result
     SHFinanzenDB.lastPayout = today
 
     table.insert(SHFinanzenDB.transactions,{
-        time        = today,
-        type        = (result >= 0) and "income" or "expense",
-        gold        = math.floor(math.abs(result)/10000),
-        silver      = math.floor((math.abs(result)%10000)/100),
-        copper      = math.abs(result)%100,
-        copperValue = result,
-        desc        = diffDays .. " Tage Nachzahlung"
+        time=today,type=(result>=0)and"income"or"expense",
+        gold=math.floor(math.abs(result)/10000),
+        silver=math.floor((math.abs(result)%10000)/100),
+        copper=math.abs(result)%100,
+        copperValue=result,
+        desc=diffDays.." Tage Nachzahlung"
     })
 
-    local sign = result < 0 and "-" or "+"
-    print("|cffff5555[SH Finanzen]|r Nachzahlung für "
-        ..diffDays.." Tage: |cffffff00" .. sign
-        ..math.floor(math.abs(result)/10000).."g "
-        ..math.floor((math.abs(result)%10000)/100).."s "
-        ..(math.abs(result)%100).."k|r" )
+    print("|cffff5555[SH Finanzen]|r Nachzahlung für "..diffDays.." Tage:")
+    print("   |cff00ff00+ "..(wage/100).." Silber Lohn|r")
+    print("   |cffff3333- "..(cost/100).." Silber Unterhalt|r")
+    print("   |cffffff00Ergebnis: "..(result/100).." Silber|r")
 end
 
-
 -----------------------------------------
-
 
     -- Wenn Startkapital noch nicht gesetzt wurde, dann nichts buchen.
     if not SHFinanzenDB.initialSet then
@@ -808,32 +803,45 @@ end
         SHFinanzenDB.lastPayout = today
     end
 
--------------------------------------------------------
--- 🔍 DEBUG – Monatsberechnung Prüfen
--------------------------------------------------------
+-- Monatsabrechnung + Nachzahlung wenn mehrere Monate verpasst wurden
 do
-    local today    = tonumber(date("%d"))
-    local month    = tonumber(date("%m"))
-    local year     = tonumber(date("%Y"))
+    local rent  = (SHFinanzenDB.rent  or 0) * 100
+    local lease = (SHFinanzenDB.lease or 0) * 100
+    local monthCost = rent + lease
 
-    local function DaysInMonth(month, year)
-        return tonumber(date("%d", time({year = year, month = month + 1, day = 0})))
+    if monthCost > 0 then
+        local now = date("%Y-%m")
+        local last = SHFinanzenDB.lastMonth or now
+
+        local y1,m1 = last:match("(%d+)%-(%d+)")
+        local y2,m2 = tonumber(date("%Y")), tonumber(date("%m"))
+
+        y1,m1 = tonumber(y1) or y2, tonumber(m1) or m2
+
+        -- 🔥 Fehlende Monate berechnen
+        local missed = (y2-y1)*12 + (m2-m1)
+        if missed < 1 then missed = 0 end
+
+        if missed > 0 then
+            local total = monthCost * missed
+            SHFinanzenDB.balance = SHFinanzenDB.balance - total
+
+            table.insert(SHFinanzenDB.transactions,{
+                time = date("%Y-%m-%d"),
+                type = "expense",
+                gold = math.floor(total / 10000),
+                silver = math.floor((total % 10000) / 100),
+                copper = total % 100,
+                copperValue = -total,
+                desc = "Nachzahlungen"
+            })
+
+            print("|cffff3333[SH Finanzen]|r Monatliche Kosten gebucht: "
+            ..missed.." Monat(e) |cffffff00-"..(total/100).." Silber|r")
+        end
+
+        SHFinanzenDB.lastMonth = now
     end
-
-    local monthLen = DaysInMonth(month, year)
-    local last     = SHFinanzenDB.lastMonthCheck
-    if not last then last = "0-0" end
-
-    print("Heute:", today,"/",month,"/",year)
-    print("Letzte Abrechnung:", last," Monatstage:",monthLen)
-
-    local lastY,lastM = last:match("(%d+)%-(%d+)")
-    lastY,lastM = tonumber(lastY) or year, tonumber(lastM) or month
-
-    local missed = (year-lastY)*12 + (month-lastM)
-    print("Fehlende Monate:", missed)
-
-    if today == monthLen then print("Heute ist Monatsabschluss-Tag") else print("Nicht letzter Tag → keine Abrechnung") end
 end
 
 RestorePos()
