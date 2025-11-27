@@ -52,7 +52,8 @@ Ideal für Händler, Arbeiter, Abenteurer — oder jeden RP-Char der nicht grati
 ## 💾 Download
 
 🔻 **Hier die ZIP hochladen**  
-*(Screenshots weiterhin per Link — keine Bild-Anhänge nötig)*
+https://github.com/Colvar91/shfinance/releases/latest/download/SHFinanzen.zip
+
 
 ---
 
