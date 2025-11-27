@@ -37,7 +37,7 @@ Ideal für Händler, Arbeiter, Abenteurer — oder jeden RP-Char der nicht grati
 6. Wenn bereits Vermögen existiert → über **Startkapital-Button** hinzufügen
 
 > Beim ersten Login wird nichts automatisch gebucht  
-> — erst, wenn Startkapital gesetzt wurde
+> — erst, wenn Startkapital,Lohn und Unterhaltosten gesetzt wurden
 
 ---
 
