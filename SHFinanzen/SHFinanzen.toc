@@ -2,7 +2,8 @@
 ## Title: SH Finanzen
 ## Notes: Finanzverwaltung für Rollenspiel-Charaktere
 ## Author: Annila
-## Version: 0.8
-## SavedVariablesPerCharacter: SHFinanzenDB
+## Version: 1.0.2
+## SavedVariablesPerCharacter: SHFinanzenDB, SHFinanzenMiniDB
 
 core.lua
+minimap.lua

@@ -6,20 +6,24 @@
 if not SHFinanzenDB then SHFinanzenDB = {} end
 if not SHFinanzenDB.transactions then SHFinanzenDB.transactions = {} end
 if SHFinanzenDB.balance       == nil then SHFinanzenDB.balance       = 0      end
-if SHFinanzenDB.daily         == nil then SHFinanzenDB.daily         = 0      end
-if SHFinanzenDB.dailyExpense  == nil then SHFinanzenDB.dailyExpense  = 0      end
-if SHFinanzenDB.rent          == nil then SHFinanzenDB.rent          = 0      end
-if SHFinanzenDB.lease         == nil then SHFinanzenDB.lease         = 0      end
-if SHFinanzenDB.lastPayout    == nil then SHFinanzenDB.lastPayout    = ""     end
-if SHFinanzenDB.lastMonth     == nil then SHFinanzenDB.lastMonth     = ""     end
-if SHFinanzenDB.initialSet    == nil then SHFinanzenDB.initialSet    = false  end
+if SHFinanzenDB.daily         == nil then SHFinanzenDB.daily         = 0      end  -- Tageslohn (Silber)
+if SHFinanzenDB.dailyExpense  == nil then SHFinanzenDB.dailyExpense  = 0      end  -- Lebensunterhalt (Silber)
+if SHFinanzenDB.rent          == nil then SHFinanzenDB.rent          = 0      end  -- Miete (Silber/Monat)
+if SHFinanzenDB.lease         == nil then SHFinanzenDB.lease         = 0      end  -- Pacht (Silber/Monat)
+if SHFinanzenDB.lastPayout    == nil then SHFinanzenDB.lastPayout    = ""     end  -- letztes Tagesdatum
+if SHFinanzenDB.lastMonth     == nil then SHFinanzenDB.lastMonth     = ""     end  -- letzter Monat
+if SHFinanzenDB.initialSet    == nil then SHFinanzenDB.initialSet    = false  end  -- Startkapital gesetzt?
 
+-----------------------------------------
 -- Hauptfenster
+-----------------------------------------
 local frame = CreateFrame("Frame", "SHFinanzenFrame", UIParent, "BasicFrameTemplateWithInset")
 frame:SetSize(445, 400)
 frame:SetClampedToScreen(true)
 
+-----------------------------------------
 -- Fensterposition speichern / laden
+-----------------------------------------
 local function RestorePos()
     frame:ClearAllPoints()
     if SHFinanzenDB.point then
@@ -47,17 +51,23 @@ frame:SetScript("OnDragStop", function(self)
     SHFinanzenDB.xOfs          = x
     SHFinanzenDB.yOfs          = y
 end)
--
+
+-----------------------------------------
 -- Titel
+-----------------------------------------
 frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 frame.title:SetPoint("TOP", 0, -5)
 
--- TAB 1: Übersicht
+-----------------------------------------
+-- TAB 1: Übersicht (Design)
+-----------------------------------------
 local overview = CreateFrame("Frame", nil, frame)
 overview:SetPoint("TOPLEFT", 15, -70)
 overview:SetPoint("BOTTOMRIGHT", -15, 15)
 
+-------------------------------------------------
 -- RP-Name aus TotalRP3 (falls vorhanden)
+-------------------------------------------------
 local function GetRPNameColored()
 
     local default = UnitName("player")
@@ -76,7 +86,7 @@ local function GetRPNameColored()
     local name = (FN .. " "):gsub("%s+"," "):gsub("^%s*(.-)%s*$","%1")
     if name == "" then name = default end
 
-    -- CH-Farbcode
+    -- 🔥 Jetzt korrekt mit CH-Farbcode
     if C.CH and C.CH ~= "" then
         return "|cff" .. C.CH .. name .. "|r"
     end
@@ -146,7 +156,9 @@ rentText:SetPoint("TOP", monthlyHeader, "BOTTOM", 0, -6)
 local pachtText = overview:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 pachtText:SetPoint("TOP", rentText, "BOTTOM", 0, 0  )
 
+-------------------------------------------------
 -- Anzeige aktualisieren
+-------------------------------------------------
 local function UpdateOverview()
     local bal = SHFinanzenDB.balance or 0
     local g = math.floor(bal / 10000)
@@ -168,7 +180,9 @@ local function UpdateOverview()
     pachtText:SetText("Pacht: " .. (SHFinanzenDB.lease or 0) .. " Silber")
 end
 
+-----------------------------------------
 -- TAB 2: Transaktionen
+-----------------------------------------
 local transactions = CreateFrame("Frame", nil, frame)
 transactions:SetPoint("TOPLEFT", 15, -70)
 transactions:SetPoint("BOTTOMRIGHT", -15, 15)
@@ -295,7 +309,9 @@ addBtn:SetScript("OnClick", function()
     UpdateOverview()
 end)
 
+-----------------------------------------
 -- TAB 3: Historie
+-----------------------------------------
 local history = CreateFrame("Frame", nil, frame)
 history:SetPoint("TOPLEFT", 15, -70)
 history:SetPoint("BOTTOMRIGHT", -15, 15)
@@ -418,7 +434,9 @@ else
 end 
 end
 
+-----------------------------------------
 -- TAB 4: Einstellungen
+-----------------------------------------
 local settings = CreateFrame("Frame", nil, frame)
 settings:SetPoint("TOPLEFT", 15, -70)
 settings:SetPoint("BOTTOMRIGHT", -15, 15)
@@ -525,7 +543,9 @@ resetBtn:SetScript("OnClick", function()
     StaticPopup_Show("SHFINANZEN_RESET_CONFIRM")
 end)
 
+------------------------------------------------------------
 -- Startvermögen-Button
+------------------------------------------------------------
 local startBtn = CreateFrame("Button", nil, settings, "UIPanelButtonTemplate")
 startBtn:SetSize(150, 26)
 startBtn:SetPoint("BOTTOM", settings, "BOTTOM", 0, 5)
@@ -541,7 +561,9 @@ initCheck:SetScript("OnEvent", function()
     end
 end)
 
+------------------------------------------------------------
 -- Popup für Startkapital
+------------------------------------------------------------
 local startWindow = CreateFrame("Frame", "SH_StartKapitalFrame", UIParent, "BasicFrameTemplateWithInset")
 startWindow:SetSize(260, 160)
 startWindow:SetPoint("CENTER")
@@ -649,7 +671,9 @@ saveBtn:SetScript("OnClick", function()
     ReloadUI()
 end)
 
+-----------------------------------------
 -- Tabs
+-----------------------------------------
 local tabs = { "Übersicht", "Transaktionen", "Historie", "Einstellungen" }
 local buttons = {}
 
@@ -684,10 +708,14 @@ for i, name in ipairs(tabs) do
     buttons[i] = b
 end
 
+-----------------------------------------
 -- Tägliche und monatliche Buchung
+-----------------------------------------
 C_Timer.After(0.1, function()
 
--- Offline-Nachzahlung (Lohn + Unterhalt für Fehltage)
+---------------------------------------------------------
+-- 🔥 Offline-Nachzahlung (Lohn + Unterhalt für Fehltage)
+---------------------------------------------------------
 local function DaysBetween(oldDate, newDate)
     local oy,om,od = oldDate:match("(%d+)-(%d+)-(%d+)")
     local ny,nm,nd = newDate:match("(%d+)-(%d+)-(%d+)")
@@ -724,6 +752,8 @@ if diffDays > 0 then
     print("   |cffffff00Ergebnis: "..(result/100).." Silber|r")
 end
 
+-----------------------------------------
+
     -- Wenn Startkapital noch nicht gesetzt wurde, dann nichts buchen.
     if not SHFinanzenDB.initialSet then
         RestorePos()
@@ -732,7 +762,7 @@ end
         return
     end
 
-    -- Tägliche Auszahlung / Belastung
+    -- 1) Tägliche Auszahlung / Belastung
     local today = date("%Y-%m-%d")
 
     if SHFinanzenDB.lastPayout ~= today then
@@ -788,7 +818,7 @@ do
 
         y1,m1 = tonumber(y1) or y2, tonumber(m1) or m2
 
-        -- Fehlende Monate berechnen
+        -- 🔥 Fehlende Monate berechnen
         local missed = (y2-y1)*12 + (m2-m1)
         if missed < 1 then missed = 0 end
 
@@ -824,8 +854,36 @@ if SHFinanzenDB.windowOpen == true then
 else
     SHFinanzenFrame:Hide()
 end
+-----------------------------------------
+-- Debug-Slashbefehle
+-----------------------------------------
 
--- Slash-Command
+-- Erzwingt nächste Tages- und Monatsbuchung
+SLASH_SHFORCE1 = "/shforce"
+SlashCmdList["SHFORCE"] = function()
+    SHFinanzenDB.lastPayout = "0"
+    SHFinanzenDB.lastMonth  = "0"
+    print("|cffff4444[SH Finanzen]|r Nächster Reload bucht Tages- und Monatswerte neu.")
+end
+
+-- Zeigt aktuelle gespeicherte Daten
+SLASH_SHDEBUG1 = "/shdebug"
+SlashCmdList["SHDEBUG"] = function()
+    print("======== SH DEBUG =========")
+    print("Daily       ", SHFinanzenDB.daily,        " (type:", type(SHFinanzenDB.daily),        ")")
+    print("DailyExpense", SHFinanzenDB.dailyExpense, " (type:", type(SHFinanzenDB.dailyExpense), ")")
+    print("Rent        ", SHFinanzenDB.rent,         " (type:", type(SHFinanzenDB.rent),         ")")
+    print("Lease       ", SHFinanzenDB.lease,        " (type:", type(SHFinanzenDB.lease),        ")")
+    print("Balance     ", SHFinanzenDB.balance)
+    print("Transactions", SHFinanzenDB.transactions)
+    print("LastPayout  ", SHFinanzenDB.lastPayout)
+    print("LastMonth   ", SHFinanzenDB.lastMonth)
+    print("===========================")
+end
+
+-------------------------------------------------
+-- Slash-Command: /shfin zum Öffnen/Schließen
+-------------------------------------------------
 SLASH_SHFIN1 = "/shfin"
 SlashCmdList["SHFIN"] = function()
     if SHFinanzenFrame:IsShown() then
